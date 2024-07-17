@@ -7,6 +7,6 @@ The following files are necessary to run the code (available to download from ht
 2. PFP_PRS_model1_normalised.csv (z-transformed PRS, phenotype and covariates to run the PRS analysis)
 3. PFP_PRS_model2_normalised.csv (z-transformed PRS, phenotype and covariates to run the PRS analysis)
 
-Polygenic risk scores (PRS) and principal components (PCs) are provided in the files above, so it is unecessary to re-generate them from the raw genetic data. However, the SNP array genotyping data is available through EGA and we have included the code that was used to QC and impute the plink binary files. We have also included te steps to calculate and normalise the PRS, as well as the steps to lift the genome build and run Genotools for genetic ancestry determination (which is provided in the file PFP_data.csv).   
+Polygenic risk scores (PRS) and principal components (PCs) are provided in the files above, so it is unecessary to re-generate them from the raw genetic data. However, the SNP array genotyping data is available through EGA and we have included the code that was used to QC and impute the plink binary files. We have also included the steps to calculate and normalise the PRS, as well as the steps to lift the genome build and run Genotools for genetic ancestry determination (which is provided in the file PFP_data.csv).   
 
 How to cite this material: 10.5281/zenodo.12552036
