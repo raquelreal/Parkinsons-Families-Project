@@ -18,27 +18,27 @@ sapply(load.lib,require,character=TRUE) #load packages
 data <- fread("PFP_data.csv")
 ```
 
-## Table 1
+## Comparing demographic characteristics of index cases by group - Table 1
 ```{r}
 cols <- c("aac","dd")
 data[, (cols) := lapply(.SD, as.numeric), .SDcols = cols]  # convert selected columns to numeric
 
 #descriptive statistics for numerical variables
-data %>% group_by(group) %>% summarise(count = n_distinct(study_id), mean_dd = mean(dd,na.rm=T), sd_dd = sd(dd,na.rm=T), mean_aac = mean(aac,na.rm=T), sd_aac = sd(aac,na.rm=T)) %>% knitr::kable("simple")
+data %>% group_by(cohort) %>% summarise(count = n_distinct(study_id), mean_dd = mean(dd,na.rm=T), sd_dd = sd(dd,na.rm=T), mean_aac = mean(aac,na.rm=T), sd_aac = sd(aac,na.rm=T)) %>% knitr::kable(digits = 1)
 
 #percentages for categorical variables
-cols <- c("sex","consanguineous_self_report","ancestry_genetic","family_status")
+cols <- c("sex","consanguinity","ancestry_genetic","family_status")
 
-# Define a function 
+# Define a function
 perform_operations <- function(variable) {
     filtered_data <- data %>%
-    filter(!is.na(group) & !is.na(.data[[variable]]))
+    filter(!is.na(cohort) & !is.na(.data[[variable]]))
 
   result <- filtered_data %>%
-    group_by(group, .data[[variable]]) %>%
+    group_by(cohort, .data[[variable]]) %>%
     summarise(count = n_distinct(study_id), .groups = 'drop') %>%
-    group_by(group) %>%
-    mutate(Percentage = prop.table(count) * 100) %>%
+    group_by(cohort) %>%
+    mutate(Percentage = prop.table(count) * 100) %>% round(1) %>%
     knitr::kable("simple")
   
   return(result)
@@ -49,33 +49,35 @@ results <- map(cols, perform_operations)
 results
 
 #Kruskal-Wallis test and post-hoc pairwise comparisons with FDR adjusted p-values (numerical variables)
-kw_results <- data %>% dplyr::select(group,aac,dd) %>% gather(key, value, -group) %>% 
+kw_results <- data %>% dplyr::select(cohort,aac,dd) %>% gather(key, value, -cohort) %>% 
        group_by(key) %>% 
-       do(tidy(kruskal.test(x= .$value, g = .$group)))
+       do(tidy(kruskal.test(x= .$value, g = .$cohort)))
 
 kw_results
 
-pairwise_results <- data %>% dplyr::select(group,aac,dd) %>% gather(key, value, -group) %>% 
+pairwise_results <- data %>% dplyr::select(cohort,aac,dd) %>% gather(key, value, -cohort) %>% 
        group_by(key) %>% 
-       do(tidy(pairwise.wilcox.test(x= .$value, g = .$group, p.adjust.method = "BH")))
+       do(tidy(pairwise.wilcox.test(x= .$value, g = .$cohort, p.adjust.method = "BH")))
 
 pairwise_results
 
 #Chi-square or Fisher's exact test with FDR adjusted p-values (categorical variables)
-cols <- c("ancestry_genetic","family_status","sex","consanguineous_self_report")
+options(digits = 3)
+cols <- c("ancestry_genetic","family_status","sex","consanguinity")
+data[, (cols) := lapply(.SD, as.factor), .SDcols = cols] # convert selected columns to factor
 
 perform_chisq_test <- function(variable) {
   if (variable == "family_status") {
     filtered_data <- data %>%
-      filter(!is.na(group) & !is.na(.data[[variable]]) & group != "sEOPD")
+      filter(!is.na(cohort) & !is.na(.data[[variable]]) & cohort != 0)
   } else {
     filtered_data <- data %>%
-      filter(!is.na(group) & !is.na(.data[[variable]]))
+      filter(!is.na(cohort) & !is.na(.data[[variable]]))
   }
   
   contingency_table <- filtered_data %>%
-    count(.data[[variable]], group) %>%
-    pivot_wider(names_from = group, values_from = n, values_fill = 0)
+    count(.data[[variable]], cohort) %>%
+    pivot_wider(names_from = cohort, values_from = n, values_fill = 0)
   
   contingency_matrix <- as.matrix(contingency_table[, -1])
   rownames(contingency_matrix) <- contingency_table$variable
@@ -99,28 +101,30 @@ results_df <- bind_rows(lapply(chisq_results, function(x) {
 }))
 
 results_df
+
 ```
 
-## Table 2
+## Comaring clinical features of mutation carriers vs. mutation-negative - Table 2
 ```{r}
 cols <- c("updrs3","motor_severity","updrs2","moca")
 data[, (cols) := lapply(.SD, as.numeric), .SDcols = cols]  # convert selected columns to numeric
 
 #descriptive statistics for numerical variables
-genes <- c("lrrk2+","prkn+", "gba+","mutation_negative")
-data %>% filter(gene_status %in% genes) %>% group_by(gene_status) %>% summarise(count = n_distinct(study_id), mean_updrs3 = mean(updrs3,na.rm=T), sd_updrs3 = sd(updrs3,na.rm=T), mean_motorSev = mean(motor_severity,na.rm=T), sd_motorSev = sd(motor_severity,na.rm=T), mean_updrs2 = mean(updrs2,na.rm=T), sd_updrs2 = sd(updrs2,na.rm=T), mean_moca = mean(moca,na.rm=T), sd_moca = sd(moca,na.rm=T)) %>% knitr::kable(digits = 3)
+data$genetic_status <- as.factor(data$genetic_status)
+genes <- c("0","1", "3","6")
+data %>% filter(genetic_status %in% genes) %>% group_by(genetic_status) %>% summarise(count = n_distinct(study_id), mean_updrs3 = mean(updrs3,na.rm=T), sd_updrs3 = sd(updrs3,na.rm=T), mean_motorSev = mean(motor_severity,na.rm=T), sd_motorSev = sd(motor_severity,na.rm=T), mean_updrs2 = mean(updrs2,na.rm=T), sd_updrs2 = sd(updrs2,na.rm=T), mean_moca = mean(moca,na.rm=T), sd_moca = sd(moca,na.rm=T)) %>% knitr::kable(digits = 3)
 
 #percentages for categorical variables
-cols <- c("motor_subtype", "hoehn_yahr","rbd", "dyskinesia", "dystonia", "fluctuations", "oh", "urinary_dysfunction", "constipation", "apathy", "anxiety", "depression", "hallucinations", "impulse_control")
+cols <- c("motor_subtype", "hoehn_yahr","rbd", "dyskinesia", "dystonia", "fluctuations", "hypotension", "urinary_dysfunction", "constipation", "apathy", "anxiety", "depression", "hallucinations", "impulse_control")
 data[, (cols) := lapply(.SD, as.factor), .SDcols = cols] # convert selected columns to factor
 
 perform_operations <- function(variable) {
   result <- data %>%
-    filter(gene_status %in% genes & !is.na(.data[[variable]])) %>%
-    group_by(gene_status, .data[[variable]]) %>%
+    filter(genetic_status %in% genes & !is.na(.data[[variable]])) %>%
+    group_by(genetic_status, .data[[variable]]) %>%
     summarise(count = n_distinct(study_id), .groups = 'drop') %>%
-    group_by(gene_status) %>%
-    mutate(Percentage = prop.table(count) * 100) 
+    group_by(genetic_status) %>%
+    mutate(Percentage = prop.table(count) * 100) %>%
   
   return(result)
 }
@@ -128,24 +132,24 @@ perform_operations <- function(variable) {
 results <- map(cols, perform_operations)
 
 results %>%
-  knitr::kable(digits = 3)
+  knitr::kable(digits = 1)
 
 #Regression analysis
 data <- data %>%
   mutate(
     prkn_status = case_when(
-      gene_status == "prkn+" ~ 1,
-      gene_status == "mutation_negative" ~ 0,
+      genetic_status == "1" ~ 1,
+      genetic_status == "0" ~ 0,
       TRUE ~ NA_real_
     ),
     lrrk2_status = case_when(
-      gene_status == "lrrk2+" ~ 1,
-      gene_status == "mutation_negative" ~ 0,
+      genetic_status == "3" ~ 1,
+      genetic_status == "0" ~ 0,
       TRUE ~ NA_real_
     ),
     gba_status = case_when(
-      gene_status == "gba+" ~ 1,
-      gene_status == "mutation_negative" ~ 0,
+      genetic_status == "6" ~ 1,
+      genetic_status == "0" ~ 0,
       TRUE ~ NA_real_
     )
   ) %>%
@@ -157,8 +161,8 @@ data <- data %>%
     # Function to perform linear regression
     perform_linear_regression <- function(variable, gene_status_column) {
         filtered_data <- data %>%
-            mutate(gene_status = .data[[gene_status_column]]) %>%
-            mutate(gene_status = fct_relevel(gene_status, "0"))
+            mutate(genetic_status = .data[[gene_status_column]]) %>%
+            mutate(genetic_status = fct_relevel(genetic_status, "0"))
   
         formula <- switch(variable,
                     "motor_severity" = as.formula(paste(variable, "~", gene_status_column, "+ sex + aac")),
@@ -184,19 +188,19 @@ data <- data %>%
 
     results_table <- regression_results %>%
         filter(term %in% c("prkn_status1", "lrrk2_status1", "gba_status1")) %>%
-            dplyr::select(variable, gene_status_column, term, estimate, conf.low, conf.high, p.value) 
+            dplyr::select(gene_status_column, variable, term, estimate, conf.low, conf.high, p.value) 
 
     results_table %>%
         knitr::kable(digits = 3)
 
     #binomial logistic regression 
-    cols <- c("dyskinesia","dystonia","fluctuations","oh","constipation","urinary_dysfunction","rbd","apathy","depression","anxiety","hallucinations","impulse_control")
+    cols <- c("dyskinesia","dystonia","fluctuations","hypotension","constipation","urinary_dysfunction","rbd","apathy","depression","anxiety","hallucinations","impulse_control")
     
     # Function to perform logistic regression
     perform_logistic_regression <- function(variable, gene_status_column) {
         filtered_data <- data %>%
-            mutate(gene_status = .data[[gene_status_column]]) %>%
-            mutate(gene_status = fct_relevel(gene_status, "0")) 
+            mutate(genetic_status = .data[[gene_status_column]]) %>%
+            mutate(genetic_status = fct_relevel(genetic_status, "0")) 
   
         formula <- as.formula(paste(variable, "~", gene_status_column, "+ sex + aac + dd"))
 
@@ -220,7 +224,7 @@ data <- data %>%
 
     results_table <- regression_results %>%
         filter(term %in% c("prkn_status1", "lrrk2_status1", "gba_status1")) %>%
-            dplyr::select(variable, gene_status_column, term, estimate, conf.low, conf.high, p.value) 
+            dplyr::select(gene_status_column, variable, term, estimate, conf.low, conf.high, p.value) 
 
     results_table %>%
         knitr::kable(digits = 3)
@@ -231,10 +235,10 @@ data <- data %>%
     perform_multinomial_regression <- function(variable, gene_status_column,data) {
         data <- data %>%
             filter(!is.na(gene_status_column) & !is.na(variable)) %>%
-                mutate(gene_status = factor(.data[[gene_status_column]], levels = c("0", "1")),
-                motor_subtype = fct_relevel(factor(motor_subtype), "Tremor-dominant"))
+                mutate(genetic_status = factor(.data[[gene_status_column]], levels = c("0", "1")),
+                motor_subtype = fct_relevel(factor(motor_subtype), "1"))
 
-        formula <- as.formula(paste(variable, "~ gene_status + sex + aac + dd"))
+        formula <- as.formula(paste(variable, "~ genetic_status + sex + aac + dd"))
 
         model <-  multinom(formula, data = data)
         model_summary <- tidy(model,conf.int = TRUE)
@@ -255,39 +259,39 @@ data <- data %>%
     })
 
     results_table <- regression_results %>%
-        filter(term == "gene_status1") %>%
+        filter(term == "genetic_status1") %>%
             mutate(lower_ci = estimate - 1.96 * std.error,
                     upper_ci = estimate + 1.96 * std.error) %>%
-                        dplyr::select(y.level,gene_status_column,estimate,std.error,lower_ci,upper_ci,p.value) 
+                        dplyr::select(gene_status_column,y.level,estimate,std.error,lower_ci,upper_ci,p.value) 
 
     results_table %>% 
         knitr::kable(digits = 3)
 ```
 
-## Supplementary Table 7
+## Comparing demographic characteristics of index cases by gene - Supplementary Table 7
 ```{r}
 cols <- c("aac","dd")
 data[, (cols) := lapply(.SD, as.numeric), .SDcols = cols]  # convert selected columns to numeric
 
 #descriptive statistics for numerical variables
-genes <- c("atxn2+","snca+","lrrk2+","prkn+","pink1+","gba+","mutation_negative")
-data %>% filter(gene_status %in% genes) %>% group_by(gene_status) %>% summarise(count = n_distinct(study_id), mean_dd = mean(dd,na.rm=T), sd_dd = sd(dd,na.rm=T), mean_aac = mean(aac,na.rm=T), sd_aac = sd(aac,na.rm=T)) %>% knitr::kable(digits = 1)
+genes <- c("5","4","3","1","2","6","0")
+data %>% filter(genetic_status %in% genes) %>% group_by(genetic_status) %>% summarise(count = n_distinct(study_id), mean_dd = mean(dd,na.rm=T), sd_dd = sd(dd,na.rm=T), mean_aac = mean(aac,na.rm=T), sd_aac = sd(aac,na.rm=T)) %>% knitr::kable(digits = 1)
 
 #percentages for categorical variables
-cols <- c("sex","consanguineous_self_report","ancestry_genetic","family_status")
+cols <- c("sex","consanguinity","ancestry_genetic","family_status")
 
 # Define a function 
 perform_operations <- function(variable) {
     filtered_data <- data %>%
-    filter(!is.na(gene_status) & !is.na(.data[[variable]]))
+    filter(!is.na(genetic_status) & !is.na(.data[[variable]]))
 
   result <- filtered_data %>%
-    filter(gene_status %in% genes) %>%
-    group_by(gene_status, .data[[variable]]) %>%
+    filter(genetic_status %in% genes) %>%
+    group_by(genetic_status, .data[[variable]]) %>%
     summarise(count = n_distinct(study_id), .groups = 'drop') %>%
-    group_by(gene_status) %>%
+    group_by(genetic_status) %>%
     mutate(Percentage = prop.table(count) * 100) %>%
-    knitr::kable(digits = 3)
+    knitr::kable(digits = 1)
   
   return(result)
 }
@@ -297,31 +301,31 @@ results <- map(cols, perform_operations)
 results
 
 #Kruskal-Wallis test and post-hoc pairwise comparisons with FDR adjusted p-values (numerical variables)
-kw_results <- data %>% filter(gene_status %in% genes) %>% dplyr::select(gene_status,aac,dd) %>% gather(key, value, -gene_status) %>% 
+kw_results <- data %>% filter(genetic_status %in% genes) %>% dplyr::select(genetic_status,aac,dd) %>% gather(key, value, -genetic_status) %>% 
        group_by(key) %>% 
-       do(tidy(kruskal.test(x= .$value, g = .$gene_status)))
+       do(tidy(kruskal.test(x= .$value, g = .$genetic_status)))
 
 kw_results 
 
-pairwise_results <- data %>% filter(gene_status %in% genes) %>% dplyr::select(gene_status,aac,dd) %>% gather(key, value, -gene_status) %>% 
+pairwise_results <- data %>% filter(genetic_status %in% genes) %>% dplyr::select(genetic_status,aac,dd) %>% gather(key, value, -genetic_status) %>% 
        group_by(key) %>% 
-       do(tidy(pairwise.wilcox.test(x= .$value, g = .$gene_status, p.adjust.method = "BH")))
+       do(tidy(pairwise.wilcox.test(x= .$value, g = .$genetic_status, p.adjust.method = "BH")))
 
 pairwise_results %>%
-    filter(group1 == "mutation_negative" | group2 == "mutation_negative") %>%
+    filter(group1 == "0" | group2 == "0") %>%
     knitr::kable(digits = 4)
 
 #Chi-square or Fisher's exact test with FDR adjusted p-values (categorical variables)
-cols <- c("ancestry_genetic","family_status","sex","consanguineous_self_report")
+cols <- c("ancestry_genetic","family_status","sex","consanguinity")
 
 perform_chisq_test <- function(variable) {
     filtered_data <- data %>%
-      filter(!is.na(gene_status) & !is.na(.data[[variable]]))
+      filter(!is.na(genetic_status) & !is.na(.data[[variable]]))
   
   contingency_table <- filtered_data %>%
-    filter(gene_status %in% genes) %>%
-    count(.data[[variable]], gene_status) %>%
-    pivot_wider(names_from = gene_status, values_from = n, values_fill = 0)
+    filter(genetic_status %in% genes) %>%
+    count(.data[[variable]], genetic_status) %>%
+    pivot_wider(names_from = genetic_status, values_from = n, values_fill = 0)
   
   contingency_matrix <- as.matrix(contingency_table[, -1])
   rownames(contingency_matrix) <- contingency_table$variable
@@ -348,49 +352,50 @@ results_df %>%
     knitr::kable(digits = 3)
 ```
 
-## Supplementary Table 8
+## Comparing clinical features of PRKN single mutation carriers - Supplementary Table 8
 ```{r}
 cols <- c("aac","dd","updrs3","motor_severity","updrs2","moca")
 data[, (cols) := lapply(.SD, as.numeric), .SDcols = cols]  # convert selected columns to numeric
 
 #descriptive statistics for numerical variables
-data %>% filter(!is.na(prkn_group)) %>% group_by(prkn_group) %>% summarise(count = n_distinct(study_id), mean_dd = mean(dd,na.rm=T), sd_dd = sd(dd,na.rm=T), mean_aac = mean(aac,na.rm=T), sd_aac = sd(aac,na.rm=T), mean_updrs3 = mean(updrs3,na.rm=T), sd_updrs3 = sd(updrs3,na.rm=T), mean_motorSev = mean(motor_severity,na.rm=T), sd_motorSev = sd(motor_severity,na.rm=T), mean_updrs2 = mean(updrs2,na.rm=T), sd_updrs2 = sd(updrs2,na.rm=T), mean_moca = mean(moca,na.rm=T), sd_moca = sd(moca,na.rm=T)) %>% knitr::kable(digits = 1)
+data %>% filter(!is.na(prkn_zygosity)) %>% group_by(prkn_zygosity) %>% summarise(count = n_distinct(study_id), mean_dd = mean(dd,na.rm=T), sd_dd = sd(dd,na.rm=T), mean_aac = mean(aac,na.rm=T), sd_aac = sd(aac,na.rm=T), mean_updrs3 = mean(updrs3,na.rm=T), sd_updrs3 = sd(updrs3,na.rm=T), mean_motorSev = mean(motor_severity,na.rm=T), sd_motorSev = sd(motor_severity,na.rm=T), mean_updrs2 = mean(updrs2,na.rm=T), sd_updrs2 = sd(updrs2,na.rm=T), mean_moca = mean(moca,na.rm=T), sd_moca = sd(moca,na.rm=T)) %>% knitr::kable(digits = 1)
 
 #percentages for categorical variables
-cols <- c("rbd", "dyskinesia", "dystonia", "fluctuations", "oh", "urinary_dysfunction", "constipation", "apathy", "anxiety", "depression", "hallucinations", "impulse_control")
+cols <- c("rbd", "dyskinesia", "dystonia", "fluctuations", "hypotension", "urinary_dysfunction", "constipation", "apathy", "anxiety", "depression", "hallucinations", "impulse_control")
 data[, (cols) := lapply(.SD, as.factor), .SDcols = cols] # convert selected columns to factor
 
 perform_operations <- function(variable) {
   result <- data %>%
-    filter(!is.na(prkn_group) & !is.na(.data[[variable]])) %>%
-    group_by(prkn_group, .data[[variable]]) %>%
+    filter(!is.na(prkn_zygosity) & !is.na(.data[[variable]])) %>%
+    group_by(prkn_zygosity, .data[[variable]]) %>%
     summarise(count = n_distinct(study_id), .groups = 'drop') %>%
-    group_by(prkn_group) %>%
-    mutate(Percentage = prop.table(count) * 100) 
+    group_by(prkn_zygosity) %>%
+    mutate(Percentage = prop.table(count) * 100) %>%
+    knitr::kable(digits = 1)
   
   return(result)
 }
 
 results <- map(cols, perform_operations)
 
-results %>%
-  knitr::kable(digits = 1)
+results 
 
 #Regression analysis
     #linear regression 
+    data$prkn_zygosity <- as.factor(data$prkn_zygosity)
     cols <- c("aac","dd","updrs3","motor_severity","updrs2","moca")
 
     # Function to perform linear regression
     perform_linear_regression <- function(variable,data,ref_category) {
+        data$prkn_zygosity <- fct_relevel(data$prkn_zygosity, ref_category)
         filtered_data <- data %>%
-            filter(!is.na(prkn_group) & !is.na(.data[[variable]])) %>%
-            mutate(prkn_group = fct_relevel(factor(prkn_group), ref_category))
+            filter(!is.na(prkn_zygosity) & !is.na(.data[[variable]]))
   
         formula <- switch(variable,
-                    "aac" = as.formula(paste(variable, "~ prkn_group + sex + dd")),
-                    "dd" = as.formula(paste(variable, "~ prkn_group + sex")),
-                    "motor_severity" = as.formula(paste(variable, "~ prkn_group + sex + aac")),
-                    as.formula(paste(variable, "~ prkn_group + sex + aac + dd")))
+                    "aac" = as.formula(paste(variable, "~ prkn_zygosity + sex + dd")),
+                    "dd" = as.formula(paste(variable, "~ prkn_zygosity + sex")),
+                    "motor_severity" = as.formula(paste(variable, "~ prkn_zygosity + sex + aac")),
+                    as.formula(paste(variable, "~ prkn_zygosity + sex + aac + dd")))
 
         model <- lm(formula, data = filtered_data)
         model_summary <- tidy(model,conf.int = TRUE)
@@ -402,8 +407,8 @@ results %>%
     }
 
     # Apply the function to each variable
-    regression_results_mutNeg <- map_dfr(cols, ~ perform_linear_regression(.x, data, "mutation_negative"))
-    regression_results_biAllelic <- map_dfr(cols, ~ perform_linear_regression(.x, data, "bi-allelic"))
+    regression_results_mutNeg <- map_dfr(cols, ~ perform_linear_regression(.x, data, "0"))
+    regression_results_biAllelic <- map_dfr(cols, ~ perform_linear_regression(.x, data, "2"))
 
     regression_results <- bind_rows(regression_results_mutNeg, regression_results_biAllelic)
 
@@ -411,19 +416,19 @@ results %>%
             dplyr::select(variable,reference,term, estimate, conf.low, conf.high, p.value) 
 
     results_table %>% 
-        filter(reference == "mutation_negative" & term == "prkn_groupmono-allelic" | reference == "bi-allelic" & term == "prkn_groupmono-allelic") %>%
-        knitr::kable(digits = 3)
+        filter(reference == "0" & term == "prkn_zygosity1" | reference == "2" & term == "prkn_zygosity1") %>%
+        knitr::kable(digits = 10)
 
     #binomial logistic regression 
-    cols <- c("dyskinesia","dystonia","fluctuations","oh","constipation","urinary_dysfunction","rbd","apathy","depression","anxiety","hallucinations","impulse_control")
+    cols <- c("dyskinesia","dystonia","fluctuations","hypotension","constipation","urinary_dysfunction","rbd","apathy","depression","anxiety","hallucinations","impulse_control")
     
     # Function to perform logistic regression
     perform_logistic_regression <- function(variable,data,ref_category) {
         filtered_data <- data %>%
-            filter(!is.na(prkn_group) & !is.na(.data[[variable]])) %>%
-            mutate(prkn_group = fct_relevel(factor(prkn_group), ref_category))
+            filter(!is.na(prkn_zygosity) & !is.na(.data[[variable]])) %>%
+            mutate(prkn_zygosity = fct_relevel(factor(prkn_zygosity), ref_category))
   
-        formula <- as.formula(paste(variable, "~ prkn_group + sex + aac + dd"))
+        formula <- as.formula(paste(variable, "~ prkn_zygosity + sex + aac + dd"))
 
         model <- glm(formula, family = binomial, data = filtered_data)
         model_summary <- tidy(model,conf.int = TRUE)
@@ -435,8 +440,8 @@ results %>%
     }
 
     # Apply the function to each variable 
-    regression_results_mutNeg <- map_dfr(cols, ~ perform_logistic_regression(.x, data, "mutation_negative"))
-    regression_results_biAllelic <- map_dfr(cols, ~ perform_logistic_regression(.x, data, "bi-allelic"))
+    regression_results_mutNeg <- map_dfr(cols, ~ perform_logistic_regression(.x, data, "0"))
+    regression_results_biAllelic <- map_dfr(cols, ~ perform_logistic_regression(.x, data, "2"))
     
     regression_results <- bind_rows(regression_results_mutNeg, regression_results_biAllelic)
 
@@ -444,11 +449,11 @@ results %>%
             dplyr::select(variable,reference,term, estimate, conf.low, conf.high, p.value) 
 
     results_table %>% 
-        filter(reference == "mutation_negative" & term == "prkn_groupmono-allelic" | reference == "bi-allelic" & term == "prkn_groupmono-allelic") %>%
+        filter(reference == "0" & term == "prkn_zygosity1" | reference == "2" & term == "prkn_zygosity1") %>%
         knitr::kable(digits = 3)
 ```
 
-## Supplementary Table 10
+## Comparing clinical features of GBA1 mutation-carriers vs mutation-negative by variant severity - Supplementary Table 10
 ```{r}
 gba_variants <- c("mild","risk","severe",NA)
 filtered_data <- data %>% filter(!is.na(gba_status) & (GBA_severity %in% gba_variants))
@@ -458,10 +463,10 @@ cols <- c("updrs3","motor_severity","updrs2","moca")
 filtered_data[, (cols) := lapply(.SD, as.numeric), .SDcols = cols]  # convert selected columns to numeric
 
 #descriptive statistics for numerical variables
-filtered_data %>% group_by(GBA_severity) %>% summarise(count = n_distinct(study_id), mean_updrs3 = mean(updrs3,na.rm=T), sd_updrs3 = sd(updrs3,na.rm=T), mean_motorSev = mean(motor_severity,na.rm=T), sd_motorSev = sd(motor_severity,na.rm=T), mean_updrs2 = mean(updrs2,na.rm=T), sd_updrs2 = sd(updrs2,na.rm=T), mean_moca = mean(moca,na.rm=T), sd_moca = sd(moca,na.rm=T)) %>% knitr::kable(digits = 3)
+filtered_data %>% group_by(GBA_severity) %>% summarise(count = n_distinct(study_id), mean_updrs3 = mean(updrs3,na.rm=T), sd_updrs3 = sd(updrs3,na.rm=T), mean_motorSev = mean(motor_severity,na.rm=T), sd_motorSev = sd(motor_severity,na.rm=T), mean_updrs2 = mean(updrs2,na.rm=T), sd_updrs2 = sd(updrs2,na.rm=T), mean_moca = mean(moca,na.rm=T), sd_moca = sd(moca,na.rm=T)) %>% knitr::kable(digits = 2)
 
 #percentages for categorical variables
-cols <- c("motor_subtype", "hoehn_yahr","rbd", "dyskinesia", "dystonia", "fluctuations", "oh", "urinary_dysfunction", "constipation", "apathy", "anxiety", "depression", "hallucinations", "impulse_control")
+cols <- c("motor_subtype", "hoehn_yahr","rbd", "dyskinesia", "dystonia", "fluctuations", "hypotension", "urinary_dysfunction", "constipation", "apathy", "anxiety", "depression", "hallucinations", "impulse_control")
 filtered_data[, (cols) := lapply(.SD, as.factor), .SDcols = cols] # convert selected columns to factor
 
 perform_operations <- function(variable) {
@@ -470,15 +475,15 @@ perform_operations <- function(variable) {
     group_by(GBA_severity, .data[[variable]]) %>%
     summarise(count = n_distinct(study_id), .groups = 'drop') %>%
     group_by(GBA_severity) %>%
-    mutate(Percentage = prop.table(count) * 100) 
+    mutate(Percentage = prop.table(count) * 100) %>%
+    knitr::kable(digits = 1)
   
   return(result)
 }
 
 results <- map(cols, perform_operations)
 
-results %>%
-  knitr::kable(digits = 3)
+results 
 
 #Regression analysis
     #linear regression 
@@ -506,14 +511,14 @@ results %>%
     regression_results <- map_dfr(cols, perform_linear_regression)
 
     results_table <- regression_results %>%
-            dplyr::select(variable,term, estimate, conf.low, conf.high, p.value) 
+            dplyr::select(term, variable, estimate, conf.low, conf.high, p.value) 
 
     results_table %>% 
         filter(term %in% c("GBA_severityrisk", "GBA_severitymild", "GBA_severitysevere")) %>%
         knitr::kable(digits = 3)
 
     #binomial logistic regression 
-    cols <- c("dyskinesia","dystonia","fluctuations","oh","constipation","urinary_dysfunction","rbd","apathy","depression","anxiety","hallucinations","impulse_control")
+    cols <- c("dyskinesia","dystonia","fluctuations","hypotension","constipation","urinary_dysfunction","rbd","apathy","depression","anxiety","hallucinations","impulse_control")
     
     # Function to perform logistic regression
     perform_logistic_regression <- function(variable) {
@@ -535,7 +540,7 @@ results %>%
     regression_results <- map_dfr(cols, perform_logistic_regression)
 
     results_table <- regression_results %>%
-            dplyr::select(variable,term, estimate, conf.low, conf.high, p.value) 
+            dplyr::select(term, variable, estimate, conf.low, conf.high, p.value) 
 
     results_table %>% 
         filter(term %in% c("GBA_severityrisk", "GBA_severitymild", "GBA_severitysevere")) %>%
@@ -548,8 +553,8 @@ results %>%
         filtered_data <- filtered_data %>%
             filter(!is.na(.data[[variable]])) %>%
                 mutate(GBA_severity = fct_relevel(GBA_severity, "mutation_negative"),
-                motor_subtype = fct_relevel(factor(motor_subtype), "Tremor-dominant"),
-                hoehn_yahr = fct_relevel(factor(hoehn_yahr), "0-1.5"))
+                motor_subtype = fct_relevel(factor(motor_subtype), "1"),
+                hoehn_yahr = fct_relevel(factor(hoehn_yahr), "0"))
 
         formula <- as.formula(paste(variable, "~ GBA_severity + sex + aac + dd"))
 
@@ -809,17 +814,17 @@ prs_pheno_covar <- inner_join(prs, pheno_covar, by = c("FID", "IID"))
 
 prs_pheno_covar$Zscore <- (prs_pheno_covar$PRS - mean(prs_pheno_covar$PRS)) / sd(prs_pheno_covar$PRS)
 
-write.csv(prs_pheno_covar, paste0(OUT, "_normalised"), quote = F, row.names = F)
+write.csv(prs_pheno_covar, paste0(OUT, "_normalised.csv"), quote = F, row.names = F)
 ```
 
 Logistic regression
 ```{r}
 FILE <- "/path/to/PFP_PRS_model"
 
-#MODEL1: Supplementary Figure 2A
+#MODEL1: PD mutation positive vs PD mutation negative (Supplementary Figure 2A)
 REF <- "PD-mutationPos" #reference category for regression analysis
 
-prs_norm <- as.data.frame(fread(paste0(FILE,"_1_normalised"), header = T))
+prs_norm <- as.data.frame(fread(paste0(FILE,"_1_normalised.csv"), header = T))
 
 prs_norm$PHENO <- as.factor(prs_norm$PHENO)
 prs_norm$PHENO <- relevel(prs_norm$PHENO, ref = REF)
@@ -832,10 +837,10 @@ model_summary %>% filter(term == "Zscore") %>%
     knitr::kable(digits = 3)
 
 
-#MODEL2: Supplementary Figure 2B
+#MODEL2: sEOPD vs fEOPD vs fLOPD (Supplementary Figure 2B)
 REF <- "sEOPD" #reference category for regression analysis
 
-prs_norm <- as.data.frame(fread(paste0(FILE,"_2_normalised"), header = T))
+prs_norm <- as.data.frame(fread(paste0(FILE,"_2_normalised.csv"), header = T))
 
 prs_norm$PHENO <- as.factor(prs_norm$PHENO)
 prs_norm$PHENO <- relevel(prs_norm$PHENO, ref = REF)
@@ -967,8 +972,9 @@ plink --bfile PFP_2_hg38 \
 ```
 
 Run GenoTools - reference panels available to download from https://github.com/dvitale199/GenoTools/
-N.B. a beta cloud version of GenoTools was used that is no longer available; please check the website above for downloading the current version and user instructions 
+N.B. a previous cloud version of GenoTools was used that is no longer available; please check the website above for downloading the current version and user instructions 
 ```{bash}
+
 plink --bfile PFP_2_hg38_updated \
     --geno 0.01 \
     --update-sex sex.txt \
@@ -986,4 +992,4 @@ python3 cloud_genotools/qc_cloud_predict_pipeline.py \
 --model NeuroChip --callrate 0.1 --out $OUT_PATH
 ```
 
-## END
+# END
