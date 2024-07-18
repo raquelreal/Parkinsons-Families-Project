@@ -9,4 +9,4 @@ The following files are necessary to run the code (available to download from ht
 
 Polygenic risk scores (PRS) and principal components (PCs) are provided in the files above, so it is unnecessary to re-generate them from the raw genetic data. However, the SNP array genotyping data is available through EGA and we have included the code that was used to QC and impute the plink binary files. We have also included the steps to calculate and normalise the PRS, as well as the steps to lift the genome build and run Genotools for genetic ancestry determination (which is provided in the file PFP_data.csv).   
 
-How to cite this material: 10.5281/zenodo.12552036
+How to cite this material: 10.5281/zenodo.12765714
